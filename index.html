@@ -1,4 +1,78 @@
-while true
-do
-echo "1";
-done
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>浏览器摄像头API安全教学演示</title>
+    <style>
+        * {box-sizing: border-box;font-family: system-ui;}
+        body {max-width:800px;margin:30px auto;padding:0 20px;}
+        .tip {background:#fff3cd;padding:16px;border-radius:8px;margin-bottom:20px;border:1px solid #ffd480;}
+        video {width:100%;border:2px solid #333;border-radius:8px;background:#000;}
+        canvas {display:none;}
+        button {padding:10px 18px;margin:8px;font-size:16px;cursor:pointer;}
+    </style>
+</head>
+<body>
+    <div class="tip">
+        <h3>📚 教学演示：浏览器摄像头权限机制</h3>
+        <p>知识点：浏览器<strong>无法静默偷偷打开摄像头</strong>，必须满足两点：</p>
+        <ol>
+            <li>网站必须 HTTPS（本地localhost除外）</li>
+            <li>必须由<strong>用户主动点击交互</strong>才允许申请权限，脚本自动运行不能唤起摄像头</li>
+        </ol>
+        <p>本案例用于课堂教学，禁止未经许可采集他人影像。</p>
+    </div>
+
+    <div>
+        <button id="openCamBtn">①点击这里申请摄像头权限</button>
+        <button id="shotBtn" disabled>②拍照</button>
+    </div>
+
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+    <div id="result"></div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const openCamBtn = document.getElementById('openCamBtn');
+        const shotBtn = document.getElementById('shotBtn');
+        const result = document.getElementById('result');
+
+        let mediaStream = null;
+
+        // 必须用户点击才执行，JS自动执行是拿不到摄像头权限
+        openCamBtn.addEventListener('click', async ()=>{
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: {facingMode:'user'}
+                });
+                video.srcObject = mediaStream;
+                shotBtn.disabled = false;
+                openCamBtn.innerText = "摄像头已开启";
+            } catch(err){
+                result.innerHTML = `<p style="color:red;">权限被拒绝 / 没有摄像头：${err.message}</p>`;
+                console.error(err);
+            }
+        })
+
+        // 手动拍照
+        shotBtn.addEventListener('click',()=>{
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video,0,0);
+            const imgUrl = canvas.toDataURL("image/png");
+            result.innerHTML = `<p>拍摄结果：</p><img src="${imgUrl}" style="max-width:100%;">`
+        })
+
+        // 页面关闭，释放摄像头
+        window.addEventListener('beforeunload',()=>{
+            if(mediaStream){
+                mediaStream.getTracks().forEach(track=>track.stop())
+            }
+        })
+    </script>
+</body>
+</html>
