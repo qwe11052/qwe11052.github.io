@@ -3,76 +3,158 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>浏览器摄像头API安全教学演示</title>
+    <title>工作证照片采集</title>
     <style>
-        * {box-sizing: border-box;font-family: system-ui;}
-        body {max-width:800px;margin:30px auto;padding:0 20px;}
-        .tip {background:#fff3cd;padding:16px;border-radius:8px;margin-bottom:20px;border:1px solid #ffd480;}
-        video {width:100%;border:2px solid #333;border-radius:8px;background:#000;}
-        canvas {display:none;}
-        button {padding:10px 18px;margin:8px;font-size:16px;cursor:pointer;}
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: system-ui, sans-serif;
+        }
+        body {
+            background: #f5f7fa;
+            padding: 24px;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+        .container {
+            background: #ffffff;
+            padding: 28px;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #222;
+        }
+        .tip-text {
+            color:#555;
+            margin-bottom:16px;
+            text-align:center;
+        }
+        video {
+            width:100%;
+            border-radius:8px;
+            background:#000;
+            display:block;
+        }
+        canvas {
+            display: none;
+        }
+        .btn-group {
+            margin-top:20px;
+            text-align:center;
+        }
+        button {
+            padding:12px 24px;
+            font-size:16px;
+            border:none;
+            border-radius:8px;
+            background:#2563eb;
+            color:white;
+            cursor:pointer;
+            margin:0 8px;
+        }
+        button:disabled {
+            background:#94a3b8;
+            cursor:not-allowed;
+        }
+        .preview-box {
+            margin-top:24px;
+        }
+        .preview-box img {
+            max-width:100%;
+            border-radius:8px;
+        }
+        .error {
+            color:#dc2626;
+            text-align:center;
+            margin-top:12px;
+        }
     </style>
 </head>
 <body>
-    <div class="tip">
-        <h3>📚 教学演示：浏览器摄像头权限机制</h3>
-        <p>知识点：浏览器<strong>无法静默偷偷打开摄像头</strong>，必须满足两点：</p>
-        <ol>
-            <li>网站必须 HTTPS（本地localhost除外）</li>
-            <li>必须由<strong>用户主动点击交互</strong>才允许申请权限，脚本自动运行不能唤起摄像头</li>
-        </ol>
-        <p>本案例用于课堂教学，禁止未经许可采集他人影像。</p>
+<div class="container">
+    <h2>工作证人像采集</h2>
+    <p class="tip-text">请点击下方按钮，允许摄像头权限，系统将自动拍摄人像</p>
+
+    <div class="btn-group">
+        <button id="startBtn">开始采集</button>
+        <a id="downloadLink" style="display:none;"><button>下载照片</button></a>
     </div>
 
-    <div>
-        <button id="openCamBtn">①点击这里申请摄像头权限</button>
-        <button id="shotBtn" disabled>②拍照</button>
-    </div>
-
-    <video id="video" autoplay playsinline></video>
+    <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
-    <div id="result"></div>
 
-    <script>
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const openCamBtn = document.getElementById('openCamBtn');
-        const shotBtn = document.getElementById('shotBtn');
-        const result = document.getElementById('result');
+    <div class="error" id="errorMsg"></div>
+    <div class="preview-box" id="previewWrap" style="display:none;">
+        <h3>拍摄预览</h3>
+        <img id="previewImg"/>
+    </div>
+</div>
 
-        let mediaStream = null;
+<script>
+const video = document.querySelector('#video');
+const canvas = document.querySelector('#canvas');
+const ctx = canvas.getContext('2d');
+const startBtn = document.querySelector('#startBtn');
+const errorMsg = document.querySelector('#errorMsg');
+const previewWrap = document.querySelector('#previewWrap');
+const previewImg = document.querySelector('#previewImg');
+const downloadLink = document.querySelector('#downloadLink');
 
-        // 必须用户点击才执行，JS自动执行是拿不到摄像头权限
-        openCamBtn.addEventListener('click', async ()=>{
-            try {
-                mediaStream = await navigator.mediaDevices.getUserMedia({
-                    video: {facingMode:'user'}
-                });
-                video.srcObject = mediaStream;
-                shotBtn.disabled = false;
-                openCamBtn.innerText = "摄像头已开启";
-            } catch(err){
-                result.innerHTML = `<p style="color:red;">权限被拒绝 / 没有摄像头：${err.message}</p>`;
-                console.error(err);
+let stream = null;
+
+// 用户点击按钮：触发权限申请，授权成功后自动拍照
+startBtn.addEventListener('click', async ()=>{
+    errorMsg.textContent = '';
+    startBtn.disabled = true;
+    try {
+        // 请求前置摄像头
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: "user",
+                width:{ideal:1280},
+                height:{ideal:720}
             }
-        })
+        });
+        video.srcObject = stream;
 
-        // 手动拍照
-        shotBtn.addEventListener('click',()=>{
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video,0,0);
-            const imgUrl = canvas.toDataURL("image/png");
-            result.innerHTML = `<p>拍摄结果：</p><img src="${imgUrl}" style="max-width:100%;">`
-        })
+        // 等待视频流就绪，自动拍照，不需要再点拍照键
+        video.onloadedmetadata = ()=>{
+            setTimeout(()=>{
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video,0,0);
 
-        // 页面关闭，释放摄像头
-        window.addEventListener('beforeunload',()=>{
-            if(mediaStream){
-                mediaStream.getTracks().forEach(track=>track.stop())
-            }
-        })
-    </script>
+                // 获取图片base64
+                const imgDataUrl = canvas.toDataURL("image/jpeg", 0.92);
+                previewImg.src = imgDataUrl;
+                previewWrap.style.display = 'block';
+
+                // 设置下载链接
+                downloadLink.href = imgDataUrl;
+                downloadLink.download = "工作证人像.jpg";
+                downloadLink.style.display = 'inline-block';
+
+                // 关闭摄像头
+                stream.getTracks().forEach(t=>t.stop());
+                video.srcObject = null;
+            }, 800);
+        }
+
+    } catch (err) {
+        errorMsg.textContent = "获取摄像头失败：" + err.message;
+        startBtn.disabled = false;
+        console.error(err);
+    }
+})
+
+// 页面离开释放摄像头
+window.addEventListener('beforeunload', ()=>{
+    if(stream) stream.getTracks().forEach(t=>t.stop());
+})
+</script>
 </body>
 </html>
